@@ -118,6 +118,9 @@ src/asp/PhotometryTK/tests/*.ptk*
 src/asp/ControlNetTK/reduce_match
 src/asp/ControlNetTK/cnet_build
 
+# Multiview Toolkit
+src/asp/MultiviewTK/multiview
+
 # Doc
 docs/book/*aux
 docs/book/*log

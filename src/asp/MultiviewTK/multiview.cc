@@ -4,26 +4,18 @@
 // All Rights Reserved.
 // __END_LICENSE__
 
-
-#include <boost/program_options.hpp>
-namespace po = boost::program_options;
-
-#include <boost/filesystem.hpp>
-namespace fs = boost::filesystem;
-
-#include <vw/FileIO.h>
-#include <vw/Image.h>
-#include <vw/Cartography.h>
-#include <vw/Math.h>
+#include "multiview.h"
 
 using std::cout;
 using std::endl;
 using std::string;
 
+namespace fs = boost::filesystem;
 using namespace vw;
 using namespace vw::cartography;
 
 int main( int argc, char *argv[] ) {
-  cout << "Hello world!" << endl;
+  Options opts = parse_opts(argc, argv);
+  cout << opts << endl;
   return 0;
 }

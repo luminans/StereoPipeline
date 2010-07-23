@@ -11,7 +11,7 @@
 #include <vw/Math.h>
 #include <vw/Camera.h>
 
-#include <asp/MultiviewTK/RefMultiView.h>
+#include <asp/MultiviewTK/PatchMultiView.h>
 
 struct Options {
   vw::BBox2i bbox;

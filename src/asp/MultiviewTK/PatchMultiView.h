@@ -9,7 +9,7 @@ namespace vw {
 namespace multiview {
 
 template <class DemT, class ImageT>
-class RefMultiView : public ImageViewBase<RefMultiView<DemT, ImageT> > {
+class PatchMultiView : public ImageViewBase<PatchMultiView<DemT, ImageT> > {
   DemT m_dem;
   cartography::GeoReference m_georef;
   std::vector<ImageT> m_image_list;
@@ -17,12 +17,12 @@ class RefMultiView : public ImageViewBase<RefMultiView<DemT, ImageT> > {
   public:
     typedef PixelMask<float32> pixel_type;
     typedef PixelMask<float32> const result_type;
-    typedef ProceduralPixelAccessor<RefMultiView> pixel_accessor;
+    typedef ProceduralPixelAccessor<PatchMultiView> pixel_accessor;
 
-    RefMultiView(DemT const& dem,
-                 cartography::GeoReference georef,
-                 std::vector<ImageT> const& image_list,
-                 std::vector<camera::PinholeModel> const& camera_list) :
+    PatchMultiView(DemT const& dem,
+                   cartography::GeoReference georef,
+                   std::vector<ImageT> const& image_list,
+                   std::vector<camera::PinholeModel> const& camera_list) :
       m_dem(dem), m_georef(georef), m_image_list(image_list), m_camera_list(camera_list) {
       
     }
@@ -50,7 +50,7 @@ class RefMultiView : public ImageViewBase<RefMultiView<DemT, ImageT> > {
       return result_type(); 
     }
 
-    typedef RefMultiView<typename DemT::prerasterize_type, ImageT> prerasterize_type;
+    typedef PatchMultiView<typename DemT::prerasterize_type, ImageT> prerasterize_type;
     inline prerasterize_type prerasterize(BBox2i bbox) const {
       // TODO: compute the bounding box on each ImageT that we need to prerasterize
       // Right now we just hope they're lightweight
@@ -64,12 +64,12 @@ class RefMultiView : public ImageViewBase<RefMultiView<DemT, ImageT> > {
 };
 
 template <class DemT, class ImageT>
-RefMultiView<DemT, ImageT> 
-ref_multiview(ImageViewBase<DemT> const& dem,
-              cartography::GeoReference const& georef,
-              std::vector<ImageT> const& image_list,
-              std::vector<camera::PinholeModel> const& camera_list) {
-  return RefMultiView<DemT, ImageT>(dem.impl(), georef, image_list, camera_list);
+PatchMultiView<DemT, ImageT> 
+patch_multiview(ImageViewBase<DemT> const& dem,
+                cartography::GeoReference const& georef,
+                std::vector<ImageT> const& image_list,
+                std::vector<camera::PinholeModel> const& camera_list) {
+  return PatchMultiView<DemT, ImageT>(dem.impl(), georef, image_list, camera_list);
 }
 
 }} //namesace vw, multiview

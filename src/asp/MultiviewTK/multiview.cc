@@ -43,7 +43,7 @@ int main( int argc, char *argv[] ) {
   GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
 
   ImageViewRef<PixelMask<float32> > refined_dem =
-    ref_multiview(dem, georef, image_list, camera_list);
+    patch_multiview(dem, georef, image_list, camera_list);
 
   return 0;
 }

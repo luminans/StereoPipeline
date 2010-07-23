@@ -11,8 +11,11 @@
 #include <vw/Math.h>
 #include <vw/Camera.h>
 
+#include <asp/MultiviewTK/RefMultiView.h>
+
 struct Options {
   vw::BBox2i bbox;
+  vw::float32 nodata_value;
   std::string dem_name;
   std::vector<std::string> image_names;
   std::vector<std::string> camera_names;
@@ -22,6 +25,7 @@ struct Options {
 std::ostream& operator<<(std::ostream& os, const Options& opts) {
   os << "bbox: " << opts.bbox << std::endl;
   os << "dem_name: " << opts.dem_name << std::endl;
+  os << "nodata_value: " << opts.nodata_value << std::endl;
 
   os << "image_names:";
   BOOST_FOREACH(std::string name, opts.image_names) {
@@ -51,6 +55,7 @@ Options parse_opts(int argc, char *argv[]) {
   desc.add_options()
     ("help,h", "Display this help message")
     ("bbox", po::value<std::vector<int> >(&bbox_bounds)->multitoken(), "xoffset yoffset width height")
+    ("nodata-value", po::value<vw::float32>(&opts.nodata_value)->default_value(0), "nodata value for DEM")
     ("output-prefix,o", po::value<std::string>(&opts.output_prefix), "Explicitly specify the output prefix")
     ("dem", po::value<std::string>(&opts.dem_name), "Explicitly specify the dem to refine")
     ("image", po::value<std::vector<std::string> >(&opts.image_names)->multitoken(), "Explicitly specify the images")

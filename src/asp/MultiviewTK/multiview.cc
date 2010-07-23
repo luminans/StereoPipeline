@@ -14,6 +14,7 @@ namespace fs = boost::filesystem;
 using namespace vw;
 using namespace vw::camera;
 using namespace vw::cartography;
+using namespace vw::multiview;
 
 int main( int argc, char *argv[] ) {
   Options opts = parse_opts(argc, argv);
@@ -29,28 +30,20 @@ int main( int argc, char *argv[] ) {
     camera_list.push_back(PinholeModel(camera));
   }
 
-  ImageViewRef<float32> dem = crop(DiskImageView<float32>(opts.dem_name),
-                                   opts.bbox);
+  ImageViewRef<PixelMask<float32> > dem = 
+    create_mask(crop(DiskImageView<float32>(opts.dem_name), opts.bbox), 
+                opts.nodata_value);
+
+  // TODO: All DEMs should really already have a transparency 
+  // channel so nodata-values aren't needed... Fix point2dem!
+  if (!opts.nodata_value) {
+    dem = validate_mask(dem);
+  }
+
   GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
 
-  for (unsigned i = 0; i < image_list.size(); i++) {
-    std::stringstream output_name;
-    output_name << opts.output_prefix << "-" << i << ".tif";
-
-    boost::shared_ptr<CameraModel> cam_ptr(new PinholeModel(camera_list[i]));
-
-    ImageViewRef<PixelMask<float32> > result_fp = orthoproject(dem, georef, 
-                                                   image_list[i], cam_ptr,
-                                                   BilinearInterpolation(), ZeroEdgeExtension());
-    ImageViewRef<PixelMask<PixelGray<uint8> > > result = 
-      pixel_cast_rescale<PixelMask<PixelGray<uint8> > >(normalize(result_fp));
-
-    {    
-      DiskImageResourceGDAL rsrc(output_name.str(), result.format(), Vector2i(256, 256));
-      write_georeference(rsrc, georef);
-      block_write_image(rsrc, result, TerminalProgressCallback("vw", output_name.str() + ": "));
-    }
-  }
+  ImageViewRef<PixelMask<float32> > refined_dem =
+    ref_multiview(dem, georef, image_list, camera_list);
 
   return 0;
 }

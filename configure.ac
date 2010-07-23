@@ -451,7 +451,8 @@ AC_CONFIG_FILES([                       \
   src/asp/PhotometryTK/Makefile         \
   src/asp/PhotometryTK/tests/Makefile   \
   src/asp/ControlNetTK/Makefile         \
-  src/asp/MultiviewTK/Makefile
+  src/asp/MultiviewTK/Makefile          \
+  src/asp/MultiviewTK/tests/Makefile
 ])
 
 AC_OUTPUT

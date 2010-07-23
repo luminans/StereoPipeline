@@ -120,6 +120,7 @@ src/asp/ControlNetTK/cnet_build
 
 # Multiview Toolkit
 src/asp/MultiviewTK/multiview
+src/asp/MultiviewTK/tests/TestPatchMultiView
 
 # Doc
 docs/book/*aux

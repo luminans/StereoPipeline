@@ -33,6 +33,8 @@ endif
 AM_CPPFLAGS = @ASP_CPPFLAGS@
 AM_LDFLAGS = @ASP_LDFLAGS@
 
+SUBDIRS = . tests
+
 includedir = $(prefix)/include/asp/MultiviewTK
 
 include $(top_srcdir)/config/rules.mak

@@ -1,6 +1,8 @@
 #ifndef __ASP_MULTIVIEWTK_MULTIVIEW_H__
 #define __ASP_MULTIVIEWTK_MULTIVIEW_H__
 
+#include <asp/MultiviewTK/PatchMultiView.h>
+
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
@@ -11,7 +13,6 @@
 #include <vw/Math.h>
 #include <vw/Camera.h>
 
-#include <asp/MultiviewTK/PatchMultiView.h>
 
 struct Options {
   vw::BBox2i bbox;

@@ -3,7 +3,11 @@
 
 #include <boost/foreach.hpp>
 
+#include <vw/Cartography/GeoReference.h>
+#include <vw/Camera/PinholeModel.h>
+
 #include <vw/Image/ImageViewBase.h>
+#include <vw/Image/PixelMask.h>
 
 namespace vw {
 namespace multiview {

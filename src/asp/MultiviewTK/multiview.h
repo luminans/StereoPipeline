@@ -9,6 +9,7 @@
 #include <vw/Image.h>
 #include <vw/Cartography.h>
 #include <vw/Math.h>
+#include <vw/Camera.h>
 
 struct Options {
   vw::BBox2i bbox;
@@ -103,6 +104,19 @@ Options parse_opts(int argc, char *argv[]) {
   }
 
   return opts;
+}
+
+vw::cartography::GeoReference 
+get_crop_georef(const std::string& image_name, const vw::BBox2i& bbox) {
+  vw::DiskImageResourceGDAL rsrc(image_name);
+  vw::cartography::GeoReference georef;
+  vw::cartography::read_georeference(georef, rsrc);
+  vw::Matrix3x3 affine = georef.transform();
+  vw::Vector2 offset = georef.pixel_to_lonlat(bbox.min());
+  affine(0, 2) = offset.x();
+  affine(1, 2) = offset.y();
+  georef.set_transform(affine);
+  return georef;
 }
 
 #endif

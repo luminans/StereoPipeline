@@ -12,8 +12,9 @@
 if MAKE_MODULE_MULTIVIEWTK
 
 TestPatchMultiView_SOURCES = TestPatchMultiView.cxx
+TestAlbedoOptimizerGaussian_SOURCES = TestAlbedoOptimizerGaussian.cxx
 
-TESTS = TestPatchMultiView
+TESTS = TestPatchMultiView TestAlbedoOptimizerGaussian
 
 endif
 

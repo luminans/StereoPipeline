@@ -18,22 +18,20 @@ using namespace vw;
 using namespace vw::multiview;
 
 TEST(AlbedoOptimizerGaussian, TestOptimize) {
-  typedef ImageView<float32> PatchT;
-
   static const int NUM_PATCHES = 4;
   float32 b_ground[] = { 3, 4, 5, 6 };
-  float32 c_ground[] = { 4, 4.4, 4.2, 4.8 };
+  float32 c_ground[] = { 4, 8, 1, 2 };
 
   boost::rand48 gen(10);
-  PatchT albedo_ground = gaussian_noise_view(gen, 0.5, 0.25, 10, 10);
+  //ImageView<float32> albedo_ground = gaussian_noise_view(gen, 0.5, 0.25, 30, 30);
+  ImageView<float32> albedo_ground = uniform_noise_view(gen, 30, 30);
 
-  std::vector<PatchT> patch(NUM_PATCHES);
+  std::vector<ImageView<float32> > patch(NUM_PATCHES);
   for (int i = 0; i < NUM_PATCHES; i++) {
     patch[i] = b_ground[i] + c_ground[i] * albedo_ground;
   }
 
-  AlbedoOptimizerGaussian optimizer(patch);
-  PatchT albedo_est = optimizer.optimize_albedo();
+  ImageView<float32> albedo_est = find_albedo_gaussian(patch);
 
   write_image("albedo_ground.tif", channel_cast_rescale<uint8>(normalize(albedo_ground)));
   write_image("albedo_est.tif", channel_cast_rescale<uint8>(normalize(albedo_est)));

@@ -32,7 +32,7 @@ objective_gaussian(std::vector<PatchT> const& patch,
 
 template <class PatchT>
 ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
-  static const unsigned MAX_ITER = 100;
+  static const unsigned MAX_ITER = 20;
   static const float32 CONV_TOL = 1e-6;
 
   unsigned num_patches = patch.size();
@@ -78,6 +78,13 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
         tmp_c[k] = c[k] - c_grad[k] * step_size;
       }
 
+      // Normalize so b_0 = 0, c_0 = 1
+      tmp_albedo = tmp_b[0] + tmp_c[0] * copy(tmp_albedo);
+      for (unsigned k = 0; k < num_patches; k++) {
+        tmp_b[k] = tmp_b[k] - tmp_c[k] / tmp_c[0] * tmp_b[0];
+        tmp_c[k] = tmp_c[k] / tmp_c[0];
+      } 
+
       // Recalculate obj;
       tmp_obj_sum = 0;
       BOOST_FOREACH(ImageView<float32> obj, objective_gaussian(patch, tmp_albedo, tmp_b, tmp_c)) {
@@ -92,7 +99,16 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
     }
 
     std::cout << "step size: " << step_size << std::endl;
-    std::cout << "b1: " << tmp_b[1] << " c1: " << tmp_c[1] << std::endl;
+    std::cout << "b: ";
+    BOOST_FOREACH(float32 b, tmp_b) {
+      std::cout << " " << b;
+    }
+    std::cout << std::endl;
+    std::cout << "c: ";
+    BOOST_FOREACH(float32 c, tmp_c) {
+      std::cout << " " << c;
+    }
+    std::cout << std::endl;
 
     // Apply grads
     albedo = tmp_albedo;

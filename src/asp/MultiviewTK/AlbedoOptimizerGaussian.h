@@ -7,8 +7,11 @@
 #include <vw/Image/PixelMask.h>
 #include <vw/Image/Statistics.h>
 #include <vw/Image/Algorithms.h>
+#include <vw/Image/Manipulation.h>
 
 #include <boost/foreach.hpp>
+
+#include <vw/FileIO.h>
 
 namespace vw {
 namespace multiview { 
@@ -69,16 +72,10 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
     std::vector<float32> tmp_b(num_patches), tmp_c(num_patches);
     float32 tmp_obj_sum;
     for (unsigned j = 0; j < MAX_ITER; j++) {
-      float32 tmp_b0 = b[0] - b_grad[0] * step_size;
-      float32 tmp_c0 = c[0] - c_grad[0] * step_size;
-
-      tmp_albedo = tmp_c0 * tmp_b0 + tmp_c0 * (albedo - albedo_grad * step_size);
-     
-      tmp_b[0] = 0;
-      tmp_c[0] = 1;
-      for (unsigned k = 1; k < num_patches; k++) {
-        tmp_b[k] = (b[k] - b_grad[k] * step_size) - tmp_b0;
-        tmp_c[k] = (c[k] - c_grad[k] * step_size) / tmp_c0;
+      tmp_albedo = albedo - albedo_grad * step_size;
+      for (unsigned k = 0; k < num_patches; k++) {
+        tmp_b[k] = b[k] - b_grad[k] * step_size;
+        tmp_c[k] = c[k] - c_grad[k] * step_size;
       }
 
       // Recalculate obj;
@@ -93,11 +90,15 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
         step_size /= 10;
       }
     }
+
     std::cout << "step size: " << step_size << std::endl;
-    std::cout << "mean albedo: " << mean_pixel_value(albedo) << std::endl;
+    std::cout << "b1: " << tmp_b[1] << " c1: " << tmp_c[1] << std::endl;
 
     // Apply grads
     albedo = tmp_albedo;
+    std::stringstream s;
+    s << "albedo/albedo-" << i << ".tif";
+    write_image(s.str(), channel_cast_rescale<uint8>(normalize(albedo)));
     b = tmp_b;
     c = tmp_c;
     obj_sum = tmp_obj_sum;

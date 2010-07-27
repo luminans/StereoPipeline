@@ -24,7 +24,7 @@ TEST(AlbedoOptimizerGaussian, TestOptimize) {
 
   boost::rand48 gen(10);
   //ImageView<float32> albedo_ground = gaussian_noise_view(gen, 0.5, 0.25, 30, 30);
-  ImageView<float32> albedo_ground = uniform_noise_view(gen, 30, 30);
+  ImageView<float32> albedo_ground = uniform_noise_view(gen, 15, 15);
 
   std::vector<ImageView<float32> > patch(NUM_PATCHES);
   for (int i = 0; i < NUM_PATCHES; i++) {

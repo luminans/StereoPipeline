@@ -13,9 +13,10 @@
 namespace vw {
 namespace multiview { 
 
+template <class PatchT, class AlbedoT>
 std::vector<ImageView<float32> >
-objective_gaussian(std::vector<ImageView<float32> > const& patch,
-                   ImageView<float32> const& albedo,
+objective_gaussian(std::vector<PatchT> const& patch,
+                   AlbedoT const& albedo,
                    std::vector<float32> const& b,
                    std::vector<float32> const& c) {
   std::vector<ImageView<float32> > obj(patch.size());
@@ -28,7 +29,7 @@ objective_gaussian(std::vector<ImageView<float32> > const& patch,
 
 template <class PatchT>
 ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
-  static const unsigned MAX_ITER = 10;
+  static const unsigned MAX_ITER = 20;
   static const float32 CONV_TOL = 1e-6;
 
   unsigned num_patches = patch.size();
@@ -62,18 +63,39 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
       albedo_grad += c[k] * temp;
     }
 
-    // Apply grads
-    for (unsigned k = 0; k < num_patches; k++) {
-      b[k] += -b_grad[k] * 0.001;
-      c[k] += -c_grad[k] * 0.001;
-      albedo += -albedo_grad * 0.001;
-    }
+    // Find a good step size
+    float32 step_size = 1;
+    ImageView<float32> tmp_albedo;
+    std::vector<float32> tmp_b(num_patches), tmp_c(num_patches);
+    float32 tmp_obj_sum;
+    for (unsigned j = 0; j < MAX_ITER; j++) {
+      tmp_albedo = albedo - albedo_grad * step_size;
 
-    // Recalculate obj;
-    obj_sum = 0;
-    BOOST_FOREACH(ImageView<float32> obj, objective_gaussian(patch, albedo, b, c)) {
-      obj_sum += sum_of_pixel_values(obj);
+      for (unsigned k = 0; k < num_patches; k++) {
+        tmp_b[k] = b[k] - b_grad[k] * step_size;
+        tmp_c[k] = c[k] - c_grad[k] * step_size;
+      }
+
+      // Recalculate obj;
+      tmp_obj_sum = 0;
+      BOOST_FOREACH(ImageView<float32> obj, objective_gaussian(patch, tmp_albedo, tmp_b, tmp_c)) {
+        tmp_obj_sum += sum_of_pixel_values(obj);
+      }
+
+      if (tmp_obj_sum < old_obj_sum) {
+        break;
+      } else {
+        step_size /= 10;
+      }
     }
+    std::cout << "step size: " << step_size << std::endl;
+    std::cout << "mean albedo: " << mean_pixel_value(albedo) << std::endl;
+
+    // Apply grads
+    albedo = tmp_albedo;
+    b = tmp_b;
+    c = tmp_c;
+    obj_sum = tmp_obj_sum;
 
     std::cout << "prev obj: " << old_obj_sum << " curr obj: " << obj_sum << std::endl;
     std::cout << "improvement: " << (old_obj_sum - obj_sum) / obj_sum << std::endl;

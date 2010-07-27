@@ -29,7 +29,7 @@ objective_gaussian(std::vector<PatchT> const& patch,
 
 template <class PatchT>
 ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
-  static const unsigned MAX_ITER = 20;
+  static const unsigned MAX_ITER = 100;
   static const float32 CONV_TOL = 1e-6;
 
   unsigned num_patches = patch.size();
@@ -69,11 +69,16 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
     std::vector<float32> tmp_b(num_patches), tmp_c(num_patches);
     float32 tmp_obj_sum;
     for (unsigned j = 0; j < MAX_ITER; j++) {
-      tmp_albedo = albedo - albedo_grad * step_size;
+      float32 tmp_b0 = b[0] - b_grad[0] * step_size;
+      float32 tmp_c0 = c[0] - c_grad[0] * step_size;
 
-      for (unsigned k = 0; k < num_patches; k++) {
-        tmp_b[k] = b[k] - b_grad[k] * step_size;
-        tmp_c[k] = c[k] - c_grad[k] * step_size;
+      tmp_albedo = tmp_c0 * tmp_b0 + tmp_c0 * (albedo - albedo_grad * step_size);
+     
+      tmp_b[0] = 0;
+      tmp_c[0] = 1;
+      for (unsigned k = 1; k < num_patches; k++) {
+        tmp_b[k] = (b[k] - b_grad[k] * step_size) - tmp_b0;
+        tmp_c[k] = (c[k] - c_grad[k] * step_size) / tmp_c0;
       }
 
       // Recalculate obj;

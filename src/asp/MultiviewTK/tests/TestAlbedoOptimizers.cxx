@@ -17,29 +17,53 @@
 using namespace vw;
 using namespace vw::multiview;
 
-TEST(AlbedoOptimizers, AlbedoOptimizerGaussian) {
-  static const int NUM_PATCHES = 4;
-  float32 b_ground[] = { 3, 4, 5, 6 };
-  float32 c_ground[] = { 4, 8, 1, 2 };
+class AlbedoOptimizerTest : public ::testing::Test {
+protected:
+  AlbedoOptimizerTest() {
+    unsigned int num_patches = 4;
+    float32 b_ground_data[] = { 3, 4, 5, 6 };
+    float32 c_ground_data[] = { 4, 8, 1, 2 };
 
-  boost::rand48 gen(10);
-  ImageView<float32> albedo_ground = uniform_noise_view(gen, 30, 30);
+    b_ground = Vector<float32>(num_patches, b_ground_data);
+    c_ground = Vector<float32>(num_patches, c_ground_data);
 
-  std::vector<ImageView<float32> > patch_list(NUM_PATCHES);
-  for (int i = 0; i < NUM_PATCHES; i++) {
-    patch_list[i] = b_ground[i] + c_ground[i] * albedo_ground;
+    boost::rand48 gen(10);
+    albedo_ground = uniform_noise_view(gen, 30, 30);
+
+    for (unsigned i = 0; i < num_patches; i++) {
+      patch_list.push_back(b_ground[i] + c_ground[i] * albedo_ground);
+    }
+
+    // Normalize everything to b_0 = 0, c_0 = 1
+    albedo_ground = b_ground[0] + c_ground[0] * copy(albedo_ground);
+    b_ground = b_ground - b_ground[0] * c_ground / c_ground[0];
+    c_ground = c_ground / c_ground[0];
+
+    //vw_log().console_log().rule_set().add_rule(40, "math");
   }
 
-  vw_log().console_log().rule_set().add_rule(40, "math");
+  std::vector<ImageView<float32> > patch_list;
+  ImageView<float32> albedo_ground;
+  Vector<float32> b_ground;
+  Vector<float32> c_ground;
+};
+
+TEST_F(AlbedoOptimizerTest, AlbedoOptimizerGaussian) {
   AlbedoOptimizerData result;
   result = math::conjugate_gradient(AlbedoOptimizerGaussian(patch_list),
                                     AlbedoOptimizerData(patch_list),
                                     math::ArmijoStepSize(0.01),
                                     100, 1e-8);
 
-  std::cout << "c: " << result.c / result.c[0] << std::endl;
-  std::cout << "b: " << result.b - result.b[0] * result.c / result.c[0] << std::endl;
+  // Normalize to b_0 = 0, c_0 = 1
+  result.albedo = result.b[0] + result.c[0] * copy(result.albedo);
+  result.b = result.b - result.b[0] * result.c / result.c[0];
+  result.c = result.c / result.c[0];
 
-  write_image("albedo_ground.tif", channel_cast_rescale<uint8>(normalize(albedo_ground)));
-  write_image("albedo_est.tif", channel_cast_rescale<uint8>(normalize(result.albedo)));
+  float32 avg_albedo_err = sum_of_pixel_values(abs(albedo_ground - result.albedo)) /
+                           albedo_ground.cols() / albedo_ground.rows();
+
+  EXPECT_LT(avg_albedo_err, 0.001);
+  EXPECT_VECTOR_NEAR(b_ground, result.b, 0.01);
+  EXPECT_VECTOR_NEAR(c_ground, result.c, 0.01);
 }

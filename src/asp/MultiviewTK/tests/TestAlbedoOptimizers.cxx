@@ -68,7 +68,7 @@ TEST_F(AlbedoOptimizerTest, AlbedoOptimizerGaussian) {
   EXPECT_VECTOR_NEAR(c_ground, result.c, 0.01);
 }
 
-TEST_F(AlbedoOptimizerTest, AlbedoOptimizerPoisson) {
+TEST_F(AlbedoOptimizerTest, DISABLED_AlbedoOptimizerPoisson) {
   AlbedoOptimizerData result;
   result = math::conjugate_gradient(AlbedoOptimizerPoisson(patch_list),
                                     AlbedoOptimizerData(patch_list),

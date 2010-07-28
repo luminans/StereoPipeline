@@ -7,7 +7,9 @@
 #include <vw/Camera/PinholeModel.h>
 
 #include <vw/Image/ImageViewBase.h>
+#include <vw/Image/ImageMath.h>
 #include <vw/Image/PixelMask.h>
+#include <vw/Image/Statistics.h>
 
 namespace vw {
 namespace multiview {
@@ -20,16 +22,14 @@ class PatchMultiView : public ImageViewBase<PatchMultiView<DemT, ImageT> > {
   std::vector<camera::PinholeModel> m_camera_list;
   public:
     typedef PixelMask<float32> pixel_type;
-    typedef PixelMask<float32> const result_type;
+    typedef PixelMask<float32> const& result_type; // Should this be const or const&?
     typedef ProceduralPixelAccessor<PatchMultiView> pixel_accessor;
 
     PatchMultiView(DemT const& dem,
                    cartography::GeoReference georef,
                    std::vector<ImageT> const& image_list,
                    std::vector<camera::PinholeModel> const& camera_list) :
-      m_dem(dem), m_georef(georef), m_image_list(image_list), m_camera_list(camera_list) {
-      
-    }
+      m_dem(dem), m_georef(georef), m_image_list(image_list), m_camera_list(camera_list) {}
 
     inline int32 cols() const { return m_dem.cols(); }
     inline int32 rows() const { return m_dem.rows(); }

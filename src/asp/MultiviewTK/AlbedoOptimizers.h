@@ -103,6 +103,53 @@ struct AlbedoOptimizerGaussian {
   }
 };
 
+struct AlbedoOptimizerPoisson {
+  typedef float32 result_type;
+  typedef AlbedoOptimizerData domain_type;
+  typedef AlbedoOptimizerData gradient_type;
+
+  std::vector<ImageView<float32> > m_patch_list;
+  const unsigned m_num_patches;
+
+  template <class PatchT>
+  AlbedoOptimizerPoisson(std::vector<PatchT> const& patch_list) :
+    m_patch_list(patch_list.size()), m_num_patches(patch_list.size()) 
+  {
+    for (unsigned i = 0; i < m_num_patches; i++) {
+      m_patch_list[i] = patch_list[i];
+    } 
+  } 
+
+  result_type operator()(domain_type const& x) const {
+    result_type result = 0;
+    for (unsigned i = 0; i < m_num_patches; i++) {
+      ImageView<float32> j = m_patch_list[i] - x.b[i];
+      result += -sum_of_pixel_values(j * log(x.c[i] * x.albedo / j) +
+                                     j - x.c[i] * x.albedo);
+    }
+    return result;
+  }
+
+  gradient_type gradient(domain_type const& x) const {
+    ImageView<float32> albedo_grad(m_patch_list[0].cols(), m_patch_list[0].rows());
+    Vector<float32> b_grad(m_num_patches);
+    Vector<float32> c_grad(m_num_patches);
+    fill(albedo_grad, 0);
+    for (unsigned i = 0; i < m_num_patches; i++) {
+      ImageView<float32> j = m_patch_list[i] - x.b[i];
+      albedo_grad += j / x.albedo - x.c[i];
+      b_grad[i] = sum_of_pixel_values(log(j / x.c[i] / x.albedo));
+      c_grad[i] = sum_of_pixel_values(j / x.c[i] - x.albedo);
+    }
+    return gradient_type(-albedo_grad, -b_grad, -c_grad);
+  }
+
+  // It looks like dimension can be any non-zero value...
+  unsigned dimension() const { 
+    return m_num_patches * m_patch_list[0].cols() * m_patch_list[0].rows(); 
+  }
+};
+
 }} //namespace vw, multiview
 
 #endif

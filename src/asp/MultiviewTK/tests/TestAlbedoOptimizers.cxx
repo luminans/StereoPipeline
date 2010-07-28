@@ -67,3 +67,23 @@ TEST_F(AlbedoOptimizerTest, AlbedoOptimizerGaussian) {
   EXPECT_VECTOR_NEAR(b_ground, result.b, 0.01);
   EXPECT_VECTOR_NEAR(c_ground, result.c, 0.01);
 }
+
+TEST_F(AlbedoOptimizerTest, AlbedoOptimizerPoisson) {
+  AlbedoOptimizerData result;
+  result = math::conjugate_gradient(AlbedoOptimizerPoisson(patch_list),
+                                    AlbedoOptimizerData(patch_list),
+                                    math::ArmijoStepSize(0.01),
+                                    300);
+
+  // Normalize to b_0 = 0, c_0 = 1
+  result.albedo = result.b[0] + result.c[0] * copy(result.albedo);
+  result.b = result.b - result.b[0] * result.c / result.c[0];
+  result.c = result.c / result.c[0];
+
+  float32 avg_albedo_err = sum_of_pixel_values(abs(albedo_ground - result.albedo)) /
+                           albedo_ground.cols() / albedo_ground.rows();
+
+  EXPECT_LT(avg_albedo_err, 0.01);
+  EXPECT_VECTOR_NEAR(b_ground, result.b, 0.1);
+  EXPECT_VECTOR_NEAR(c_ground, result.c, 0.1);
+}

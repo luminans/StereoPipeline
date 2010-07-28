@@ -32,7 +32,7 @@ objective_gaussian(std::vector<PatchT> const& patch,
 
 template <class PatchT>
 ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
-  static const unsigned MAX_ITER = 20;
+  static const unsigned MAX_ITER = 400;
   static const float32 CONV_TOL = 1e-6;
 
   unsigned num_patches = patch.size();
@@ -61,9 +61,9 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
     fill(albedo_grad, 0);
     for (unsigned k = 0; k < num_patches; k++) {
       ImageView<float32> temp = b[k] + c[k] * albedo - patch[k];
+      albedo_grad += c[k] * temp;
       b_grad[k] = sum_of_pixel_values(temp);
       c_grad[k] = sum_of_pixel_values(albedo * temp);
-      albedo_grad += c[k] * temp;
     }
 
     // Find a good step size
@@ -78,13 +78,6 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
         tmp_c[k] = c[k] - c_grad[k] * step_size;
       }
 
-      // Normalize so b_0 = 0, c_0 = 1
-      tmp_albedo = tmp_b[0] + tmp_c[0] * copy(tmp_albedo);
-      for (unsigned k = 0; k < num_patches; k++) {
-        tmp_b[k] = tmp_b[k] - tmp_c[k] / tmp_c[0] * tmp_b[0];
-        tmp_c[k] = tmp_c[k] / tmp_c[0];
-      } 
-
       // Recalculate obj;
       tmp_obj_sum = 0;
       BOOST_FOREACH(ImageView<float32> obj, objective_gaussian(patch, tmp_albedo, tmp_b, tmp_c)) {
@@ -94,33 +87,34 @@ ImageView<float32> find_albedo_gaussian(std::vector<PatchT> const& patch) {
       if (tmp_obj_sum < old_obj_sum) {
         break;
       } else {
-        step_size /= 10;
+        step_size /= 2;
       }
     }
 
-    std::cout << "step size: " << step_size << std::endl;
-    std::cout << "b: ";
-    BOOST_FOREACH(float32 b, tmp_b) {
-      std::cout << " " << b;
-    }
-    std::cout << std::endl;
-    std::cout << "c: ";
-    BOOST_FOREACH(float32 c, tmp_c) {
-      std::cout << " " << c;
-    }
-    std::cout << std::endl;
-
     // Apply grads
     albedo = tmp_albedo;
-    std::stringstream s;
-    s << "albedo/albedo-" << i << ".tif";
-    write_image(s.str(), channel_cast_rescale<uint8>(normalize(albedo)));
     b = tmp_b;
     c = tmp_c;
     obj_sum = tmp_obj_sum;
 
+    std::cout << "step size: " << step_size << std::endl;
+    std::cout << "b: ";
+    for (unsigned k = 0; k < num_patches; k++) {
+      std::cout << " " << b[k] - c[k] / c[0] * b[0];
+    }
+    std::cout << std::endl;
+    std::cout << "c: ";
+    for (unsigned k = 0; k < num_patches; k++) {
+      std::cout << " " << c[k] / c[0];
+    }
+    std::cout << std::endl;
+
     std::cout << "prev obj: " << old_obj_sum << " curr obj: " << obj_sum << std::endl;
-    std::cout << "improvement: " << (old_obj_sum - obj_sum) / obj_sum << std::endl;
+    std::cout << "improvement: " << old_obj_sum - obj_sum << std::endl;
+    if (old_obj_sum - obj_sum < CONV_TOL) {
+      std::cout << "iterations: " << i << std::endl;
+      break;
+    }
   }
 
   return albedo;

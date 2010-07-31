@@ -18,6 +18,7 @@
 namespace vw {
 namespace multiview { 
 
+// Optimizer Domain and Gradient Data Type
 struct AlbedoOptimizerData {
   ImageView<float32> albedo;
   Vector<float32> b;
@@ -57,6 +58,7 @@ float32 dot_prod(AlbedoOptimizerData const& x, AlbedoOptimizerData const& y) {
   return result;
 }
 
+// Objective and Gradient Functions for Gaussian Noise
 struct AlbedoOptimizerGaussian {
   typedef float32 result_type;
   typedef AlbedoOptimizerData domain_type;
@@ -103,6 +105,7 @@ struct AlbedoOptimizerGaussian {
   }
 };
 
+// Objective and Gradient Functions for Poisson Noise
 struct AlbedoOptimizerPoisson {
   typedef float32 result_type;
   typedef AlbedoOptimizerData domain_type;

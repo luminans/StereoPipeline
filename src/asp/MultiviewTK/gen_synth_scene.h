@@ -13,7 +13,7 @@
 namespace vw {
 namespace cartography {
 
-Vector3 lonlat_to_normal(Vector2 p, bool east_positive=true) {
+Vector3 lonlat_to_normal(Vector2 const& p, bool east_positive=true) {
   // Convert from lon, lat to an xyz direction vector pointing
   // in the r direction
   //
@@ -22,21 +22,22 @@ Vector3 lonlat_to_normal(Vector2 p, bool east_positive=true) {
   // y = cos(latitude) * sin(longitude)
   // z = sin(latitude)
 
-  // If west positive, convert to east positive
-  if (!east_positive) {
-    p[0] = -p[0];
+  if (east_positive) {
+    return Vector3(cos(p[1] * M_PI/180.0) * cos(p[0] * M_PI/180.0),
+                   cos(p[1] * M_PI/180.0) * sin(p[0] * M_PI/180.0),
+                   sin(p[1] * M_PI/180.0));
+  } else {
+    return Vector3(cos(p[1] * M_PI/180.0) * cos(-p[0] * M_PI/180.0),
+                   cos(p[1] * M_PI/180.0) * sin(-p[0] * M_PI/180.0),
+                   sin(p[1] * M_PI/180.0));
   }
-
-  return Vector3(cos(p[1] * M_PI/180.0) * cos(p[0] * M_PI/180.0),
-                 cos(p[1] * M_PI/180.0) * sin(p[0] * M_PI/180.0),
-                 sin(p[1] * M_PI/180.0));
 }
 
 struct PlaneDEMFunctor {
   typedef double result_type;
   GeoReference m_georef;
   Vector4 m_plane;
-  PlaneDEMFunctor(GeoReference georef, Vector4 plane) : 
+  PlaneDEMFunctor(GeoReference const& georef, Vector4 const& plane) : 
     m_georef(georef), m_plane(plane) {}
   result_type operator()(double i, double j, int32 /*p*/) const {
     // Assumes east is positive longitude for the georef...
@@ -47,34 +48,68 @@ struct PlaneDEMFunctor {
 };
 
 inline PerPixelIndexView<PlaneDEMFunctor>
-plane_dem_view(GeoReference georef, Vector4 plane,
-               int32 cols, int32 rows, int32 planes = 1) {
+plane_dem_view(GeoReference const& georef, Vector4 const& plane,
+               int32 cols, int32 rows) {
   typedef PerPixelIndexView<PlaneDEMFunctor> result_type;
-  return result_type(PlaneDEMFunctor(georef, plane), cols, rows, planes);
+  return result_type(PlaneDEMFunctor(georef, plane), cols, rows);
 }
 
 inline PerPixelIndexView<PlaneDEMFunctor>
-plane_dem_view(GeoReference georef, Vector3 normal, Vector3 p,
-               int32 cols, int32 rows, int32 planes = 1) {
+plane_dem_view(GeoReference const& georef, Vector3 const& normal, 
+               Vector3 const& p, int32 cols, int32 rows) {
   VW_LINE_ASSERT(fabs(norm_2(normal) - 1) < 0.001);
   Vector4 plane(normal[0], normal[1], normal[2], dot_prod(normal, p));
-  return plane_dem_view(georef, normal, plane, cols, rows, planes);
+  return plane_dem_view(georef, normal, plane, cols, rows);
 }
 
 struct LonLatIndexFunctor {
   typedef Vector2 result_type;
   GeoReference m_georef;
-  LonLatIndexFunctor(GeoReference georef) : m_georef(georef) {}
+  LonLatIndexFunctor(GeoReference const& georef) : m_georef(georef) {}
   result_type operator()(double i, double j, int32 /*p*/) {
     return m_georef.pixel_to_lonlat(Vector2(i, j));
   }
 };
 
 inline PerPixelIndexView<LonLatIndexFunctor>
-lonlat_index_view(GeoReference georef, 
+lonlat_index_view(GeoReference const& georef, 
                   int32 cols, int32 rows, int32 planes = 1) {
   typedef PerPixelIndexView<LonLatIndexFunctor> result_type;
   return result_type(LonLatIndexFunctor(georef), cols, rows, planes);
+}
+
+template <class ImageT>
+struct BackprojectPlaneFunctor {
+  typedef typename ImageT::result_type result_type;
+  ImageT m_image;
+  GeoReference m_georef;
+  camera::PinholeModel m_camera;
+  Vector4 m_plane;
+  BackprojectPlaneFunctor(ImageT const& image, GeoReference const& georef,
+                          camera::PinholeModel const& camera,
+                          Vector4 const& plane) :
+    m_image(image), m_georef(georef), m_camera(camera), m_plane(plane) {}
+  result_type operator()(double i, double j, int32 /*p*/) const {
+    Vector3 camera_center = m_camera.camera_center();
+    Vector3 ray_dir = m_camera.pixel_to_vector(Vector2(i, j));
+    Vector3 normal(m_plane[0], m_plane[1], m_plane[2]);
+    double t = (m_plane[3] - dot_prod(normal, camera_center)) /
+               dot_prod(normal, ray_dir);
+    Vector3 isect = camera_center + t * ray_dir;
+    Vector3 isect_llr = xyz_to_lon_lat_radius(isect);
+    Vector2 pixel = m_georef.lonlat_to_pixel(Vector2(isect_llr[0], isect_llr[1]));
+    return m_image(pixel.x(), pixel.y());
+  }
+};
+
+template <class ImageT>
+inline PerPixelIndexView<BackprojectPlaneFunctor<ImageT> >
+backproject_plane(ImageViewBase<ImageT> const& image, GeoReference const& georef,
+                  camera::PinholeModel const& camera, Vector4 const& plane,
+                  int32 cols, int32 rows) {
+  typedef PerPixelIndexView<BackprojectPlaneFunctor<ImageT> > result_type;
+  return result_type(BackprojectPlaneFunctor<ImageT>(
+    image.impl(), georef, camera, plane), cols, rows);
 }
 
 }} // namespace cartography namespace vw
@@ -84,7 +119,7 @@ vw::cartography::GeoReference gen_dem_georef() {
   using namespace vw::cartography;
   // 1024x1024 DEM georef
   // Original DEM mean: -2604.93 stddev:888.459
-  double georef_affine_data[] = { 0.00133653359715, 0.00000000000000, 55.4549405161,
+  double georef_affine_data[] = { 0.00133653359715, 0.00000000000000, 55.7209107019,
                                   0.00000000000000,-0.00133653359715, 10.1949968063,
                                   0.00000000000000, 0.00000000000000, 1.00000000000 };
   return GeoReference(Datum("D_MOON"), MatrixProxy<double>(georef_affine_data, 3, 3));
@@ -129,7 +164,7 @@ std::vector<vw::camera::PinholeModel> gen_camera_list() {
 // Generate a plane with height cntr_height at the center
 // of the DEM, and a normal pointing in the radial direction
 // out of the center of the DEM
-vw::Vector4 gen_plane(vw::cartography::GeoReference georef, 
+vw::Vector4 gen_plane(vw::cartography::GeoReference const& georef, 
                       double cntr_height, vw::int32 cols, vw::int32 rows)
 {
   using namespace vw;
@@ -147,7 +182,7 @@ vw::Vector4 gen_plane(vw::cartography::GeoReference georef,
 // of the DEM, height cntr_height + delta_height at the
 // upper left hand corner of the DEM, and height cntr_height
 // at the upper right hand corner of the DEM.
-vw::Vector4 gen_plane(vw::cartography::GeoReference georef, 
+vw::Vector4 gen_plane(vw::cartography::GeoReference const& georef, 
                       double cntr_height, double delta_height,
                       vw::int32 cols, vw::int32 rows)
 {

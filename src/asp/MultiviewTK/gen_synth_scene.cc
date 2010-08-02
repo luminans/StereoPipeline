@@ -36,20 +36,19 @@ int main( int argc, char *argv[] ) {
   // Create DRG-ground.tif
   boost::rand48 gen;
   write_image(output_folder + "/DRG-ground.tif",
-              pixel_cast<float32>(uniform_noise_view(gen, dem_width, dem_height)));
+              pixel_cast<float32>(gaussian_filter(uniform_noise_view(
+              gen, dem_width, dem_height), 1.5)));
   DiskImageView<float32> drg_ground(output_folder + "/DRG-ground.tif");
 
-  /*
   for (unsigned i = 0; i < camera_list.size(); i++) {
-    stringstream ss;
+    std::stringstream ss;
     ss << output_folder << "/" << i << ".tif";
-    write_image(ss.str(), 
-                gen_orbital_image(drg_ground, 
-                                  camera_list[i], 
-                                  dem_ground_plane
-                                  1800, 1800));
-
-  } */
+    write_image(ss.str(), channel_cast_rescale<uint8>(
+                backproject_plane(interpolate(drg_ground, 
+                BilinearInterpolation(), ZeroEdgeExtension()) , georef,
+                camera_list[i], dem_ground_plane, 1800, 1800)),
+                TerminalProgressCallback("vw", ss.str()));
+  }
 
   return 0;
 }

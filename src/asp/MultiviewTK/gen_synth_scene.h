@@ -42,8 +42,9 @@ struct PlaneDEMFunctor {
   result_type operator()(double i, double j, int32 /*p*/) const {
     // Assumes east is positive longitude for the georef...
     Vector2 lonlat = m_georef.pixel_to_lonlat(Vector2(i, j));
-    return -m_plane[3] / dot_prod(Vector3(m_plane[0], m_plane[1], m_plane[2]),
-                                  lonlat_to_normal(lonlat));
+    double r = m_plane[3] / dot_prod(Vector3(m_plane[0], m_plane[1], m_plane[2]),
+                                     lonlat_to_normal(lonlat));
+    return r - m_georef.datum().radius(lonlat[0], lonlat[1]);
   }
 };
 

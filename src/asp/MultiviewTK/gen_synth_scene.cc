@@ -15,6 +15,7 @@ using namespace vw::camera;
 using namespace vw::cartography;
 
 int main( int argc, char *argv[] ) {
+  boost::rand48 gen;
   const int dem_width = 1024, dem_height = 1024;
   //TODO: boost args
   string output_folder = ".";
@@ -23,31 +24,53 @@ int main( int argc, char *argv[] ) {
 
   // Create DEM-initial.tif
   Vector4 dem_initial_plane = gen_plane(georef, -2605, dem_width, dem_height);
-  write_image(output_folder + "/DEM-initial.tif", 
-              pixel_cast<float32>(plane_dem_view(georef,
-              dem_initial_plane, dem_width, dem_height)));
+  {
+    ImageViewRef<float32> out = pixel_cast<float32>(plane_dem_view(georef,
+                                dem_initial_plane, dem_width, dem_height));
+    DiskImageResourceGDAL rsrc(output_folder + "/DEM-initial.tif", out.format(),
+                               Vector2i(256, 256));
+    write_georeference(rsrc, georef);
+    block_write_image(rsrc, out,
+      TerminalProgressCallback("vw", "DEM-initial.tif: "));
+  }
 
   // Create DEM-ground.tif
   Vector4 dem_ground_plane = gen_plane(georef, -2605, 888, dem_width, dem_height);
-  write_image(output_folder + "/DEM-ground.tif", 
-              pixel_cast<float32>(plane_dem_view(georef,
-              dem_ground_plane, dem_width, dem_height)));
+  {
+    ImageViewRef<float32> out = pixel_cast<float32>(plane_dem_view(georef,
+                                dem_ground_plane, dem_width, dem_height));
+    DiskImageResourceGDAL rsrc(output_folder + "/DEM-ground.tif", out.format(),
+                               Vector2i(256, 256));
+    write_georeference(rsrc, georef);
+    block_write_image(rsrc, out,
+      TerminalProgressCallback("vw", "DEM-ground.tif: "));
+  }
 
   // Create DRG-ground.tif
-  boost::rand48 gen;
-  write_image(output_folder + "/DRG-ground.tif",
-              pixel_cast<float32>(gaussian_filter(uniform_noise_view(
-              gen, dem_width, dem_height), 1.5)));
-  DiskImageView<float32> drg_ground(output_folder + "/DRG-ground.tif");
+  {
+    ImageViewRef<float32> out = pixel_cast<float32>(gaussian_filter(uniform_noise_view(
+                                gen, dem_width, dem_height), 1.5));
+    DiskImageResourceGDAL rsrc(output_folder + "/DRG-ground.tif", out.format(),
+                               Vector2i(256, 256));
+    write_georeference(rsrc, georef);
+    block_write_image(rsrc, out,
+      TerminalProgressCallback("vw", "DRG-ground.tif: "));
+  }
 
+  // Create Orbital Images
+  DiskImageView<float32> drg_ground(output_folder + "/DRG-ground.tif");
   for (unsigned i = 0; i < camera_list.size(); i++) {
     std::stringstream ss;
-    ss << output_folder << "/" << i << ".tif";
-    write_image(ss.str(), channel_cast_rescale<uint8>(
-                backproject_plane(interpolate(drg_ground, 
-                BilinearInterpolation(), ZeroEdgeExtension()) , georef,
-                camera_list[i], dem_ground_plane, 1800, 1800)),
-                TerminalProgressCallback("vw", ss.str()));
+    ss << i;
+    {
+      ImageViewRef<float32> out = backproject_plane(interpolate(drg_ground, 
+        BilinearInterpolation(), ZeroEdgeExtension()) , georef, camera_list[i],
+        dem_ground_plane, 1800, 1800);
+      DiskImageResourceGDAL rsrc(output_folder + "/" + ss.str() + ".tif", out.format(),
+                                 Vector2i(256, 256));
+      block_write_image(rsrc, out, TerminalProgressCallback("vw", ss.str() + ".tif: "));
+    }
+    camera_list[i].write(output_folder + "/" + ss.str() + ".pinhole");
   }
 
   return 0;

@@ -20,7 +20,10 @@ MULTIVIEWTK_LOCAL_LIBS = @MODULE_MULTIVIEWTK_LIBS@
 multiview_SOURCES = multiview.cc
 multiview_LDADD   = $(MULTIVIEWTK_LOCAL_LIBS)
 
-bin_PROGRAMS = multiview
+gen_synth_scene_SOURCES = gen_synth_scene.cc
+gen_synth_scene_LDADD = $(MULTIVIEWTK_LOCAL_LIBS)
+
+bin_PROGRAMS = multiview gen_synth_scene
 
 endif
 

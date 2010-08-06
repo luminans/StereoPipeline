@@ -2,6 +2,7 @@
 #define __ASP_MULTIVIEWTK_MULTIVIEW_H__
 
 #include <asp/MultiviewTK/PatchMultiView.h>
+#include <asp/MultiviewTK/gen_synth_scene.h>
 
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
@@ -113,13 +114,15 @@ Options parse_opts(int argc, char *argv[]) {
 }
 
 vw::cartography::GeoReference
-get_crop_georef(vw::cartography::GeoReference georef, vw::BBox2i const& bbox) {
+get_crop_georef(vw::cartography::GeoReference const& georef, vw::BBox2i const& bbox) {
   vw::Matrix3x3 affine = georef.transform();
   vw::Vector2 offset = georef.pixel_to_lonlat(bbox.min());
   affine(0, 2) = offset.x();
   affine(1, 2) = offset.y();
-  georef.set_transform(affine);
-  return georef;
+  
+  vw::cartography::GeoReference result(georef);
+  result.set_transform(affine);
+  return result;
 }
 
 vw::cartography::GeoReference 
@@ -128,6 +131,25 @@ get_crop_georef(std::string const& image_name, vw::BBox2i const& bbox) {
   vw::cartography::GeoReference georef;
   vw::cartography::read_georeference(georef, rsrc);
   return get_crop_georef(georef, bbox);
+}
+
+template <class DemT>
+vw::Vector4 approx_dem_plane(vw::int32 x, vw::int32 y, DemT dem, vw::cartography::GeoReference georef) {
+  using namespace vw;
+  std::vector<Vector2i> img_pts(3);
+  std::vector<Vector3> pts(3);
+  img_pts[0] = Vector2(x, y);
+  img_pts[1] = Vector2(x - 1, y - 1);
+  img_pts[2] = Vector2(x - 1, y);
+
+  for (unsigned i = 0; i < 3; i++) {
+    Vector2 lonlat = georef.pixel_to_lonlat(img_pts[i]);
+    double rad = georef.datum().radius(lonlat[0], lonlat[1]) + 
+                 dem(img_pts[i][0], img_pts[i][1]);
+    pts[i] = cartography::lon_lat_radius_to_xyz(Vector3(lonlat[0], lonlat[1], rad));
+  }
+
+  return gen_plane(pts[0], pts[1], pts[2]);
 }
 
 #endif

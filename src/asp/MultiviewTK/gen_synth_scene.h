@@ -185,6 +185,7 @@ vw::Vector4 gen_plane(vw::cartography::GeoReference const& georef,
   return Vector4(normal[0], normal[1], normal[2], dot_prod(normal, dem_cntr_xyz));
 }
 
+// TODO: Use a loop instead
 // Generate a plane with height cntr_height at the center
 // of the DEM, height cntr_height + delta_height at the
 // upper left hand corner of the DEM, and height cntr_height

@@ -20,11 +20,11 @@ using namespace vw::multiview;
 int main( int argc, char *argv[] ) {
   Options opts = parse_opts(argc, argv);
 
-  std::vector<DiskImageView<PixelMask<float32> > > image_list;
+  std::vector<DiskImageView<float32> > image_list;
   std::vector<PinholeModel> camera_list;
 
   BOOST_FOREACH(string image, opts.image_names) {
-    image_list.push_back(DiskImageView<PixelMask<float32> >(image));
+    image_list.push_back(DiskImageView<float32>(image));
   }
 
   BOOST_FOREACH(string camera, opts.camera_names) {
@@ -43,7 +43,20 @@ int main( int argc, char *argv[] ) {
 
   GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
 
+  GeometryOptimizer<DiskImageView<float32> > go(512, 512, georef, image_list,
+                                                            camera_list);
 
+  Vector4 plane = approx_dem_plane(512, 512, dem, georef);
+  // Convert to GeometryOptimizer plane type
+  plane[3] = dem(512, 512);
+
+  std::vector<ImageView<float32> > patch_list = go.get_ortho_patches(plane);
+
+  for (unsigned i = 0; i < patch_list.size(); i++) {
+    std::stringstream ss;
+    ss << i;
+    write_image("patch-" + ss.str() + ".tif", channel_cast_rescale<uint8>(patch_list[i])); 
+  }
 
   return 0;
 }

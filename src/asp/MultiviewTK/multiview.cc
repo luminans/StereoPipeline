@@ -4,7 +4,8 @@
 // All Rights Reserved.
 // __END_LICENSE__
 
-#include "multiview.h"
+#include <asp/MultiviewTK/multiview.h>
+#include <asp/MultiviewTK/GeometryOptimizer.h>
 
 using std::cout;
 using std::endl;
@@ -42,8 +43,7 @@ int main( int argc, char *argv[] ) {
 
   GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
 
-  ImageViewRef<PixelMask<float32> > refined_dem =
-    patch_multiview(dem, georef, image_list, camera_list);
+
 
   return 0;
 }

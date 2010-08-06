@@ -162,6 +162,12 @@ std::vector<vw::camera::PinholeModel> gen_camera_list() {
   return camera_list;
 }
 
+// Generate a plane given three points (XYZ)
+vw::Vector4 gen_plane(vw::Vector3 const& p1, vw::Vector3 const& p2, vw::Vector3 const& p3) {
+  vw::Vector3 normal(normalize(cross_prod(p1 - p2, p3 - p2)));
+  return vw::Vector4(normal[0], normal[1], normal[2], dot_prod(normal, p2));
+} 
+
 // Generate a plane with height cntr_height at the center
 // of the DEM, and a normal pointing in the radial direction
 // out of the center of the DEM
@@ -207,9 +213,7 @@ vw::Vector4 gen_plane(vw::cartography::GeoReference const& georef,
                      cntr_height + georef.datum().radius(dem_ur_ll[0], dem_ur_ll[1]));
   Vector3 dem_ur_xyz(vw::cartography::lon_lat_radius_to_xyz(dem_ur_llr));
 
-  Vector3 normal(normalize(cross_prod(dem_ur_xyz - dem_cntr_xyz, dem_ul_xyz - dem_cntr_xyz)));
-
-  return Vector4(normal[0], normal[1], normal[2], dot_prod(normal, dem_cntr_xyz));
+  return gen_plane(dem_ur_xyz, dem_cntr_xyz, dem_ul_xyz);
 }
 
 #endif

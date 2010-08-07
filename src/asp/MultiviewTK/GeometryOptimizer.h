@@ -42,17 +42,33 @@ struct GeometryOptimizer {
 
   const unsigned m_num_patches;
 
+  ImageView<float32> m_kernel, m_kernel_deriv;
+
   GeometryOptimizer(int32 x, int32 y, cartography::GeoReference const& georef,
                     std::vector<ImageT> const& image_list, 
                     std::vector<camera::PinholeModel> const& camera_list) :
     m_lonlat(georef.pixel_to_lonlat(Vector2(x, y))), 
     m_georef(get_crop_georef(georef, BBox2i(x - half_kern, y - half_kern, whole_kern, whole_kern))), 
     m_image_list(image_list), m_camera_list(camera_list),
-    m_num_patches(image_list.size()) 
+    m_num_patches(image_list.size()),
+    m_kernel(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0,
+                                                 whole_kern / 6.0, 0,
+                                                 M_PI / 2, whole_kern)),
+    m_kernel_deriv(generate_gaussian_derivative_kernel(whole_kern / 6.0, 1, 
+                                                       whole_kern / 6.0, 1, 
+                                                       M_PI / 2, whole_kern))
   {}
      
   result_type operator()(domain_type const& x) const {
-    return result_type(0);
+    float32 sum = 0;
+
+    std::vector<ImageView<float32> > cost_list = get_cost_patches(get_ortho_patches(x));
+
+    BOOST_FOREACH(ImageView<float32> cost, cost_list) {
+      sum += sum_of_pixel_values(m_kernel * cost);
+    }
+
+    return sum;
   } 
 
   gradient_type gradient(domain_type const& x) const {
@@ -78,6 +94,25 @@ struct GeometryOptimizer {
     }
 
     return patch_list;
+  }
+
+  std::vector<ImageView<float32> > 
+  get_cost_patches(std::vector<ImageView<float32> > const& patch_list) const {
+    std::vector<ImageView<float32> > result(m_num_patches);
+
+    ImageView<float32> albedo(patch_list[0].cols(), patch_list[0].rows());
+
+    BOOST_FOREACH(ImageView<float32> patch, patch_list) {
+      albedo += patch;
+    }
+
+    albedo /= patch_list.size();
+
+    for (int i = 0; i < m_num_patches; i++) {
+      result[i] = patch_list[i] * log(albedo / patch_list[i]) + patch_list[i] - albedo;
+    }
+
+    return result;
   }
 
   unsigned dimension() const {

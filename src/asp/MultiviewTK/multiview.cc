@@ -43,15 +43,18 @@ int main( int argc, char *argv[] ) {
 
   GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
 
-  GeometryOptimizer<DiskImageView<float32> > go(512, 512, georef, image_list,
+  int col = 30, row = 30;
+  GeometryOptimizer<DiskImageView<float32> > go(col, row, georef, image_list,
                                                             camera_list);
 
-  Vector4 plane = approx_dem_plane(512, 512, dem, georef);
+  Vector4 plane = approx_dem_plane(col, row, dem, georef);
   // Convert to GeometryOptimizer plane type
-  plane[3] = dem(512, 512);
+  plane[3] = dem(col, row);
+
+  cout << go(plane) << endl;
 
   std::vector<ImageView<float32> > patch_list = go.get_ortho_patches(plane);
-
+ 
   for (unsigned i = 0; i < patch_list.size(); i++) {
     std::stringstream ss;
     ss << i;

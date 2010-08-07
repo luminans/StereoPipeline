@@ -42,7 +42,7 @@ struct GeometryOptimizer {
 
   const unsigned m_num_patches;
 
-  ImageView<float32> m_kernel, m_kernel_deriv;
+  ImageView<float32> m_kernel, m_kernel_deriv_x, m_kernel_deriv_y;
 
   GeometryOptimizer(int32 x, int32 y, cartography::GeoReference const& georef,
                     std::vector<ImageT> const& image_list, 
@@ -54,9 +54,12 @@ struct GeometryOptimizer {
     m_kernel(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0,
                                                  whole_kern / 6.0, 0,
                                                  M_PI / 2, whole_kern)),
-    m_kernel_deriv(generate_gaussian_derivative_kernel(whole_kern / 6.0, 1, 
-                                                       whole_kern / 6.0, 1, 
-                                                       M_PI / 2, whole_kern))
+    m_kernel_deriv_x(generate_gaussian_derivative_kernel(whole_kern / 6.0, 1, 
+                                                         whole_kern / 6.0, 0, 
+                                                         M_PI / 2, whole_kern)),
+    m_kernel_deriv_y(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0, 
+                                                         whole_kern / 6.0, 1, 
+                                                         M_PI / 2, whole_kern))
   {}
      
   result_type operator()(domain_type const& x) const {
@@ -72,7 +75,76 @@ struct GeometryOptimizer {
   } 
 
   gradient_type gradient(domain_type const& x) const {
-    return gradient_type();
+    std::vector<ImageView<float32> > patch_list = get_ortho_patches(x);
+    std::vector<ImageView<float32> > cost_list = get_cost_patches(patch_list);
+
+    // This can be precomputed
+    Matrix<double, 3, 2> de_d0;
+    de_d0(0, 0) = -cos(m_lonlat[1]) * sin(m_lonlat[0]);
+    de_d0(1, 0) = cos(m_lonlat[1]) * cos(m_lonlat[0]);
+    de_d0(2, 0) = 0;
+
+    de_d0(0, 1) = -sin(m_lonlat[1]) * cos(m_lonlat[0]);
+    de_d0(1, 1) = -sin(m_lonlat[1]) * sin(m_lonlat[0]);
+    de_d0(2, 1) = cos(m_lonlat[1]);
+
+    // This can also can be precomputed.
+    // TODO: Remove inverses
+    Matrix2x2 S_inv = inverse(submatrix(m_georef.transform(), 0, 0, 2, 2));
+
+    Vector3 e = cartography::lonlat_to_normal(m_lonlat);
+    Vector3 x_ = x[3] * e;
+    Vector3 n = math::SubVector<Vector4 const>(x, 0, 3);
+
+    Vector4 result(0, 0, 0, 0);
+    for (int i = 0; i < m_num_patches; i++) {
+      Matrix<double, 3, 4> P(m_camera_list[i].camera_matrix());
+
+      Vector3 p1(P(0, 0), P(0, 1), P(0, 2));
+      Vector3 p2(P(1, 0), P(1, 1), P(1, 2));
+      Vector3 p3(P(2, 0), P(2, 1), P(2, 2));
+
+      Matrix3x3 Q1 = x_ * transpose(p1) + P(0, 3) * identity_matrix(3);
+      Matrix3x3 Q2 = x_ * transpose(p2) + P(1, 3) * identity_matrix(3);
+      Matrix3x3 Q3 = x_ * transpose(p3) + P(2, 3) * identity_matrix(3);
+
+      double u1 = dot_prod(n, Q1 * e);
+      double u2 = dot_prod(n, Q2 * e);
+      double u3 = dot_prod(n, Q3 * e);
+
+      Matrix3x3 A1 = u3 * Q1 - u1 * Q3;
+      Matrix3x3 A2 = u3 * Q2 - u2 * Q3;
+
+      Matrix<double, 2, 3> C_half;
+      select_row(C_half, 0) = transpose(A1) * n;
+      select_row(C_half, 1) = transpose(A2) * n;
+
+      Matrix2x2 C_inv = inverse(C_half * de_d0);
+
+      Matrix<double, 2, 3> tmp;
+      select_row(tmp, 0) = select_col(A1, 0);
+      select_row(tmp, 1) = select_col(A2, 0);
+      Vector2 dz_dnx = -S_inv * C_inv * tmp * e;
+      select_row(tmp, 0) = select_col(A1, 1);
+      select_row(tmp, 1) = select_col(A2, 1);
+      Vector2 dz_dny = -S_inv * C_inv * tmp * e;
+      select_row(tmp, 0) = select_col(A1, 2);
+      select_row(tmp, 1) = select_col(A2, 2);
+      Vector2 dz_dnz = -S_inv * C_inv * tmp * e;
+      select_row(tmp, 0) = u3 * p1 - u1 * p3;
+      select_row(tmp, 1) = u3 * p2 - u2 * p3;
+      Vector2 dz_dr = -S_inv * C_inv * tmp * e * dot_prod(n, e);
+
+      Vector2 cost_sum(sum_of_pixel_values(m_kernel_deriv_x * cost_list[i]),
+                       sum_of_pixel_values(m_kernel_deriv_y * cost_list[i]));
+
+      result +=  Vector4(dot_prod(cost_sum, dz_dnx),
+                         dot_prod(cost_sum, dz_dny),
+                         dot_prod(cost_sum, dz_dnz),
+                         dot_prod(cost_sum, dz_dr));
+    }
+
+    return result;
   }
 
   std::vector<ImageView<float32> > get_ortho_patches(domain_type const& x) const {

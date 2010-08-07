@@ -6,6 +6,7 @@
 
 #include <asp/MultiviewTK/multiview.h>
 #include <asp/MultiviewTK/GeometryOptimizer.h>
+#include <vw/Math/ConjugateGradient.h>
 
 using std::cout;
 using std::endl;
@@ -43,7 +44,7 @@ int main( int argc, char *argv[] ) {
 
   GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
 
-  int col = 30, row = 30;
+  int col = 300, row = 300;
   GeometryOptimizer<DiskImageView<float32> > go(col, row, georef, image_list,
                                                             camera_list);
 
@@ -51,15 +52,9 @@ int main( int argc, char *argv[] ) {
   // Convert to GeometryOptimizer plane type
   plane[3] = dem(col, row);
 
-  cout << go(plane) << endl;
+  vw_log().console_log().rule_set().add_rule(40, "math");
 
-  std::vector<ImageView<float32> > patch_list = go.get_ortho_patches(plane);
- 
-  for (unsigned i = 0; i < patch_list.size(); i++) {
-    std::stringstream ss;
-    ss << i;
-    write_image("patch-" + ss.str() + ".tif", channel_cast_rescale<uint8>(patch_list[i])); 
-  }
+  Vector4 result = math::conjugate_gradient(go, plane, math::ArmijoStepSize(1e-250), 100);
 
   return 0;
 }

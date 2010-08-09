@@ -65,7 +65,7 @@ struct GeometryOptimizer {
   result_type operator()(domain_type const& x) const {
     float32 sum = 0;
 
-    std::vector<ImageView<float32> > cost_list = get_cost_patches(get_ortho_patches(x));
+    std::vector<ImageView<float32> > cost_list(get_cost_patches(get_ortho_patches(x)));
 
     BOOST_FOREACH(ImageView<float32> cost, cost_list) {
       sum += sum_of_pixel_values(m_kernel * cost);
@@ -75,9 +75,21 @@ struct GeometryOptimizer {
   } 
 
   gradient_type gradient(domain_type const& x) const {
-    std::vector<ImageView<float32> > patch_list = get_ortho_patches(x);
-    std::vector<ImageView<float32> > cost_list = get_cost_patches(patch_list);
+    std::vector<ImageView<float32> > cost_list(get_cost_patches(get_ortho_patches(x)));
+    std::vector<Matrix<double, 2, 4> > jacobian_list(get_jacobians(x));
 
+    Vector4 result(0, 0, 0, 0);
+    for (unsigned i = 0; i < m_num_patches; i++) {
+      Vector2 cost_sum(sum_of_pixel_values(m_kernel_deriv_x * cost_list[i]),
+                       sum_of_pixel_values(m_kernel_deriv_y * cost_list[i]));
+
+      result += transpose(jacobian_list[i]) * cost_sum;
+    }
+
+    return result;
+  }
+
+  std::vector<Matrix<double, 2, 4> > get_jacobians(domain_type const& x) const {
     // This can be precomputed
     Matrix<double, 3, 2> de_d0;
     de_d0(0, 0) = -cos(m_lonlat[1]) * sin(m_lonlat[0]);
@@ -96,8 +108,8 @@ struct GeometryOptimizer {
     Vector3 x_ = x[3] * e;
     Vector3 n = math::SubVector<Vector4 const>(x, 0, 3);
 
-    Vector4 result(0, 0, 0, 0);
-    for (int i = 0; i < m_num_patches; i++) {
+    std::vector<Matrix<double, 2, 4> > result(m_num_patches);
+    for (unsigned i = 0; i < m_num_patches; i++) {
       Matrix<double, 3, 4> P(m_camera_list[i].camera_matrix());
 
       Vector3 p1(P(0, 0), P(0, 1), P(0, 2));
@@ -124,24 +136,19 @@ struct GeometryOptimizer {
       Matrix<double, 2, 3> tmp;
       select_row(tmp, 0) = select_col(A1, 0);
       select_row(tmp, 1) = select_col(A2, 0);
-      Vector2 dz_dnx = -S_inv * C_inv * tmp * e;
+      select_col(result[i], 0) = -S_inv * C_inv * tmp * e; // dz_dnx
+
       select_row(tmp, 0) = select_col(A1, 1);
       select_row(tmp, 1) = select_col(A2, 1);
-      Vector2 dz_dny = -S_inv * C_inv * tmp * e;
+      select_col(result[i], 1) = -S_inv * C_inv * tmp * e; // dz_dny
+
       select_row(tmp, 0) = select_col(A1, 2);
       select_row(tmp, 1) = select_col(A2, 2);
-      Vector2 dz_dnz = -S_inv * C_inv * tmp * e;
+      select_col(result[i], 2) = -S_inv * C_inv * tmp * e; // dz_dnz
+
       select_row(tmp, 0) = u3 * p1 - u1 * p3;
       select_row(tmp, 1) = u3 * p2 - u2 * p3;
-      Vector2 dz_dr = -S_inv * C_inv * tmp * e * dot_prod(n, e);
-
-      Vector2 cost_sum(sum_of_pixel_values(m_kernel_deriv_x * cost_list[i]),
-                       sum_of_pixel_values(m_kernel_deriv_y * cost_list[i]));
-
-      result +=  Vector4(dot_prod(cost_sum, dz_dnx),
-                         dot_prod(cost_sum, dz_dny),
-                         dot_prod(cost_sum, dz_dnz),
-                         dot_prod(cost_sum, dz_dr));
+      select_col(result[i], 3) = -S_inv * C_inv * tmp * e * dot_prod(n, e); // dz_dr
     }
 
     return result;
@@ -180,8 +187,9 @@ struct GeometryOptimizer {
 
     albedo /= patch_list.size();
 
-    for (int i = 0; i < m_num_patches; i++) {
-      result[i] = patch_list[i] * log(albedo / patch_list[i]) + patch_list[i] - albedo;
+    for (unsigned i = 0; i < m_num_patches; i++) {
+//      result[i] = patch_list[i] * log(albedo / patch_list[i]) + patch_list[i] - albedo;
+      result[i] = (albedo - patch_list[i]) * (albedo - patch_list[i]);
     }
 
     return result;

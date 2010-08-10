@@ -1,5 +1,5 @@
-#ifndef __ASP__MULTIVIEWTK__GEOMETRYOPTIMIZER_H__
-#define __ASP__MULTIVIEWTK__GEOMETRYOPTIMIZER_H__
+#ifndef __ASP_MULTIVIEWTK_GEOMETRYOPTIMIZER_H__
+#define __ASP_MULTIVIEWTK_GEOMETRYOPTIMIZER_H__
 
 #include <vw/Image/ImageViewBase.h>
 #include <vw/Image/ImageView.h>
@@ -18,6 +18,9 @@
 
 #include <asp/MultiviewTK/multiview.h>
 
+#include <asp/MultiviewTK/GeometryOptimizer.h>
+#include <asp/MultiviewTK/MatrixImageMath.h>
+
 namespace vw {
 namespace multiview {
 
@@ -26,7 +29,7 @@ struct GeometryOptimizer {
   static const int half_kern = 8;
   static const int whole_kern = half_kern * 2 + 1;
 
-  typedef float32 result_type;
+  typedef double result_type;
 
   // Domain and result type are planes. In this case, the last entry is
   // the radius in sphereical coords (unlike the stuff in gen_synth_scene)
@@ -42,7 +45,8 @@ struct GeometryOptimizer {
 
   const unsigned m_num_patches;
 
-  ImageView<float32> m_kernel, m_kernel_deriv_x, m_kernel_deriv_y;
+  ImageView<double> m_kernel;
+  ImageView<Vector2> m_kernel_deriv;
 
   GeometryOptimizer(int32 x, int32 y, cartography::GeoReference const& georef,
                     std::vector<ImageT> const& image_list, 
@@ -54,104 +58,17 @@ struct GeometryOptimizer {
     m_kernel(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0,
                                                  whole_kern / 6.0, 0,
                                                  M_PI / 2, whole_kern)),
-    m_kernel_deriv_x(generate_gaussian_derivative_kernel(whole_kern / 6.0, 1, 
-                                                         whole_kern / 6.0, 0, 
-                                                         M_PI / 2, whole_kern)),
-    m_kernel_deriv_y(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0, 
-                                                         whole_kern / 6.0, 1, 
+    m_kernel_deriv(generate_gaussian_derivative_kernel(whole_kern / 6.0,
+                                                         whole_kern / 6.0,
                                                          M_PI / 2, whole_kern))
   {}
      
   result_type operator()(domain_type const& x) const {
-    float32 sum = 0;
-
-    std::vector<ImageView<float32> > cost_list(get_cost_patches(get_ortho_patches(x)));
-
-    BOOST_FOREACH(ImageView<float32> cost, cost_list) {
-      sum += sum_of_pixel_values(m_kernel * cost);
-    }
-
-    return sum;
+    return result_type();
   } 
 
   gradient_type gradient(domain_type const& x) const {
-    std::vector<ImageView<float32> > cost_list(get_cost_patches(get_ortho_patches(x)));
-    std::vector<Matrix<double, 2, 4> > jacobian_list(get_jacobians(x));
-
-    Vector4 result(0, 0, 0, 0);
-    for (unsigned i = 0; i < m_num_patches; i++) {
-      Vector2 cost_sum(sum_of_pixel_values(m_kernel_deriv_x * cost_list[i]),
-                       sum_of_pixel_values(m_kernel_deriv_y * cost_list[i]));
-
-      result += transpose(jacobian_list[i]) * cost_sum;
-    }
-
-    return result;
-  }
-
-  std::vector<Matrix<double, 2, 4> > get_jacobians(domain_type const& x) const {
-    // This can be precomputed
-    Matrix<double, 3, 2> de_d0;
-    de_d0(0, 0) = -cos(m_lonlat[1]) * sin(m_lonlat[0]);
-    de_d0(1, 0) = cos(m_lonlat[1]) * cos(m_lonlat[0]);
-    de_d0(2, 0) = 0;
-
-    de_d0(0, 1) = -sin(m_lonlat[1]) * cos(m_lonlat[0]);
-    de_d0(1, 1) = -sin(m_lonlat[1]) * sin(m_lonlat[0]);
-    de_d0(2, 1) = cos(m_lonlat[1]);
-
-    // This can also can be precomputed.
-    // TODO: Remove inverses
-    Matrix2x2 S_inv = inverse(submatrix(m_georef.transform(), 0, 0, 2, 2));
-
-    Vector3 e = cartography::lonlat_to_normal(m_lonlat);
-    Vector3 x_ = x[3] * e;
-    Vector3 n = math::SubVector<Vector4 const>(x, 0, 3);
-
-    std::vector<Matrix<double, 2, 4> > result(m_num_patches);
-    for (unsigned i = 0; i < m_num_patches; i++) {
-      Matrix<double, 3, 4> P(m_camera_list[i].camera_matrix());
-
-      Vector3 p1(P(0, 0), P(0, 1), P(0, 2));
-      Vector3 p2(P(1, 0), P(1, 1), P(1, 2));
-      Vector3 p3(P(2, 0), P(2, 1), P(2, 2));
-
-      Matrix3x3 Q1 = x_ * transpose(p1) + P(0, 3) * identity_matrix(3);
-      Matrix3x3 Q2 = x_ * transpose(p2) + P(1, 3) * identity_matrix(3);
-      Matrix3x3 Q3 = x_ * transpose(p3) + P(2, 3) * identity_matrix(3);
-
-      double u1 = dot_prod(n, Q1 * e);
-      double u2 = dot_prod(n, Q2 * e);
-      double u3 = dot_prod(n, Q3 * e);
-
-      Matrix3x3 A1 = u3 * Q1 - u1 * Q3;
-      Matrix3x3 A2 = u3 * Q2 - u2 * Q3;
-
-      Matrix<double, 2, 3> C_half;
-      select_row(C_half, 0) = transpose(A1) * n;
-      select_row(C_half, 1) = transpose(A2) * n;
-
-      Matrix2x2 C_inv = inverse(C_half * de_d0);
-
-      Matrix<double, 2, 3> tmp;
-      select_row(tmp, 0) = select_col(A1, 0);
-      select_row(tmp, 1) = select_col(A2, 0);
-      select_col(result[i], 0) = -S_inv * C_inv * tmp * e; // dz_dnx
-
-      select_row(tmp, 0) = select_col(A1, 1);
-      select_row(tmp, 1) = select_col(A2, 1);
-      select_col(result[i], 1) = -S_inv * C_inv * tmp * e; // dz_dny
-
-      select_row(tmp, 0) = select_col(A1, 2);
-      select_row(tmp, 1) = select_col(A2, 2);
-      select_col(result[i], 2) = -S_inv * C_inv * tmp * e; // dz_dnz
-
-      select_row(tmp, 0) = u3 * p1 - u1 * p3;
-      select_row(tmp, 1) = u3 * p2 - u2 * p3;
-      select_col(result[i], 3) = -S_inv * C_inv * tmp * e * dot_prod(n, e); // dz_dr
-    }
-
-    return result;
+    return gradient_type();
   }
 
   std::vector<ImageView<float32> > get_ortho_patches(domain_type const& x) const {
@@ -173,26 +90,6 @@ struct GeometryOptimizer {
     }
 
     return patch_list;
-  }
-
-  std::vector<ImageView<float32> > 
-  get_cost_patches(std::vector<ImageView<float32> > const& patch_list) const {
-    std::vector<ImageView<float32> > result(m_num_patches);
-
-    ImageView<float32> albedo(patch_list[0].cols(), patch_list[0].rows());
-
-    BOOST_FOREACH(ImageView<float32> patch, patch_list) {
-      albedo += patch;
-    }
-
-    albedo /= patch_list.size();
-
-    for (unsigned i = 0; i < m_num_patches; i++) {
-//      result[i] = patch_list[i] * log(albedo / patch_list[i]) + patch_list[i] - albedo;
-      result[i] = (albedo - patch_list[i]) * (albedo - patch_list[i]);
-    }
-
-    return result;
   }
 
   unsigned dimension() const {

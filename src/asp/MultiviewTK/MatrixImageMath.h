@@ -22,6 +22,17 @@ generate_gaussian_derivative_kernel(double x_sigma, double y_sigma,
   return result;
 }
 
+struct PlaneJacobianFunctor {
+  typedef Matrix<double, 4, 2> result_type;
+  cartography::GeoReference m_georef;
+  Vector4 m_plane;
+  PlaneJacobianFunctor(cartography::GeoReference const& georef, Vector4 const& plane) :
+    m_georef(georef), m_plane(plane) {}
+  result_type operator()(double i, double j, int32 /*p*/) const {
+    return result_type();
+  }
+};
+
 } // namespace vw
 
 #endif 

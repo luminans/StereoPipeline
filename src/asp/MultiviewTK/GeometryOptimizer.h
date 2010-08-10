@@ -52,7 +52,7 @@ struct GeometryOptimizer {
                     std::vector<ImageT> const& image_list, 
                     std::vector<camera::PinholeModel> const& camera_list) :
     m_lonlat(georef.pixel_to_lonlat(Vector2(x, y))), 
-    m_georef(get_crop_georef(georef, BBox2i(x - half_kern, y - half_kern, whole_kern, whole_kern))), 
+    m_georef(translate_georef(georef, Vector2(x - half_kern, y - half_kern))), 
     m_image_list(image_list), m_camera_list(camera_list),
     m_num_patches(image_list.size()),
     m_kernel(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0,

@@ -42,7 +42,9 @@ int main( int argc, char *argv[] ) {
     dem = validate_mask(dem);
   }
 
-  GeoReference georef = get_crop_georef(opts.dem_name, opts.bbox);
+  GeoReference georef;
+  read_georeference(georef, opts.dem_name);
+  georef = translate_georef(georef, opts.bbox.min());
 
   int col = 300, row = 300;
   GeometryOptimizer<DiskImageView<float32> > go(col, row, georef, image_list,

@@ -114,23 +114,14 @@ Options parse_opts(int argc, char *argv[]) {
 }
 
 vw::cartography::GeoReference
-get_crop_georef(vw::cartography::GeoReference const& georef, vw::BBox2i const& bbox) {
+translate_georef(vw::cartography::GeoReference const& georef, vw::Vector2i const& offset) {
   vw::Matrix3x3 affine = georef.transform();
-  vw::Vector2 offset = georef.pixel_to_lonlat(bbox.min());
   affine(0, 2) = offset.x();
   affine(1, 2) = offset.y();
   
   vw::cartography::GeoReference result(georef);
   result.set_transform(affine);
   return result;
-}
-
-vw::cartography::GeoReference 
-get_crop_georef(std::string const& image_name, vw::BBox2i const& bbox) {
-  vw::DiskImageResourceGDAL rsrc(image_name);
-  vw::cartography::GeoReference georef;
-  vw::cartography::read_georeference(georef, rsrc);
-  return get_crop_georef(georef, bbox);
 }
 
 template <class DemT>

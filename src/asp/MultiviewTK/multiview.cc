@@ -44,19 +44,17 @@ int main( int argc, char *argv[] ) {
 
   GeoReference georef;
   read_georeference(georef, opts.dem_name);
-  georef = translate_georef(georef, opts.bbox.min());
+  translate_georef(georef, opts.bbox.min());
 
-  int col = 300, row = 300;
+  int col = 500, row = 500;
   GeometryOptimizer<DiskImageView<float32> > go(col, row, georef, image_list,
                                                             camera_list);
 
   Vector4 plane = approx_dem_plane(col, row, dem, georef);
-  // Convert to GeometryOptimizer plane type
-  plane[3] = dem(col, row);
 
   vw_log().console_log().rule_set().add_rule(40, "math");
 
-  Vector4 result = math::conjugate_gradient(go, plane, math::ArmijoStepSize(1e-250), 100);
+  Vector4 result = math::conjugate_gradient(go, plane, math::ArmijoStepSize(.1), 500);
 
   return 0;
 }

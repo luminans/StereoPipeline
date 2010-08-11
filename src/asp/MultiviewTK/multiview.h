@@ -113,15 +113,13 @@ Options parse_opts(int argc, char *argv[]) {
   return opts;
 }
 
-vw::cartography::GeoReference
-translate_georef(vw::cartography::GeoReference const& georef, vw::Vector2i const& offset) {
+void
+translate_georef(vw::cartography::GeoReference& georef, vw::Vector2i const& offset) {
   vw::Matrix3x3 affine = georef.transform();
-  affine(0, 2) = offset.x();
-  affine(1, 2) = offset.y();
-  
-  vw::cartography::GeoReference result(georef);
-  result.set_transform(affine);
-  return result;
+  vw::Vector2 lonlat_offset = georef.pixel_to_lonlat(offset);
+  affine(0, 2) = lonlat_offset.x();
+  affine(1, 2) = lonlat_offset.y();
+  georef.set_transform(affine);
 }
 
 template <class DemT>

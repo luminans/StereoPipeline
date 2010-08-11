@@ -26,8 +26,17 @@ namespace multiview {
 
 template <class ImageT>  
 struct GeometryOptimizer {
-  static const int half_kern = 8;
+  // Size of the correlation window
+  static const int half_win = 8;
+  static const int whole_win = half_win * 2 + 1;
+
+  // Size of the smoothing kernel
+  static const int half_kern = 2;
   static const int whole_kern = half_kern * 2 + 1;
+
+  // Final size of correlation window, with padding
+  static const int half_win_pad = half_win + half_kern;
+  static const int whole_win_pad = half_win_pad * 2 + 1;
 
   typedef double result_type;
 
@@ -45,46 +54,77 @@ struct GeometryOptimizer {
 
   const unsigned m_num_patches;
 
-  ImageView<double> m_kernel;
-  ImageView<Vector2> m_kernel_deriv;
+  ImageView<double> m_window;
 
   GeometryOptimizer(int32 x, int32 y, cartography::GeoReference const& georef,
                     std::vector<ImageT> const& image_list, 
                     std::vector<camera::PinholeModel> const& camera_list) :
     m_lonlat(georef.pixel_to_lonlat(Vector2(x, y))), 
-    m_georef(translate_georef(georef, Vector2(x - half_kern, y - half_kern))), 
+    m_georef(georef) , 
     m_image_list(image_list), m_camera_list(camera_list),
     m_num_patches(image_list.size()),
-    m_kernel(generate_gaussian_derivative_kernel(whole_kern / 6.0, 0,
-                                                 whole_kern / 6.0, 0,
-                                                 M_PI / 2, whole_kern)),
-    m_kernel_deriv(generate_gaussian_derivative_kernel(whole_kern / 6.0,
-                                                         whole_kern / 6.0,
-                                                         M_PI / 2, whole_kern))
-  {}
+    m_window(generate_gaussian_derivative_kernel(whole_win_pad / 6.0, 0,
+                                                 whole_win_pad / 6.0, 0,
+                                                 M_PI / 2, whole_win_pad))
+  {
+    translate_georef(m_georef, Vector2(x - half_win_pad, y - half_win_pad));
+  }
      
   result_type operator()(domain_type const& x) const {
-    return result_type();
+    std::vector<ImageView<float32> > patch_list(get_ortho_patches(x));
+    ImageView<float32> albedo(whole_win_pad, whole_win_pad);
+
+    BOOST_FOREACH(ImageView<float32> patch, patch_list) {
+      albedo += patch;
+    }
+
+    albedo /= m_num_patches;
+
+    result_type result = 0;
+
+    for (unsigned i = 0; i < m_num_patches; i++) {
+      ImageView<float32> e = patch_list[i] - albedo;
+      result += sum_of_pixel_values(m_window * gaussian_filter(e * e, whole_kern / 6.0));
+    }
+
+    return result;
   } 
 
   gradient_type gradient(domain_type const& x) const {
-    return gradient_type();
+    std::cout << x << std::endl;
+
+    std::vector<ImageView<float32> > patch_list(get_ortho_patches(x));
+    ImageView<float32> albedo(whole_win_pad, whole_win_pad);
+
+    BOOST_FOREACH(ImageView<float32> patch, patch_list) {
+      albedo += patch;
+    }
+
+    albedo /= m_num_patches;
+
+    ImageView<Vector2> grad_albedo = derivative_gaussian_filter(albedo, whole_kern / 6.0, 
+                                                                whole_kern / 6.0, M_PI / 2, whole_kern);
+
+    gradient_type result(0, 0, 0, 0);
+    for (unsigned i = 0; i < m_num_patches; i++) {
+      ImageView<Vector2> grad_l = grad_albedo * gaussian_filter(patch_list[i] - albedo, whole_kern / 6.0);
+
+      result += sum_of_pixel_values(m_window * 
+        plane_jacobian_view(m_lonlat, m_georef, m_camera_list[i], x, whole_win_pad, whole_win_pad) * grad_l); 
+    }
+
+
+    return result;
   }
 
   std::vector<ImageView<float32> > get_ortho_patches(domain_type const& x) const {
-    // convert to gen_synth_scene plane type
-    double radius = x[3] + m_georef.datum().radius(m_lonlat[0], m_lonlat[1]);
-    Vector3 pt = cartography::lon_lat_radius_to_xyz(Vector3(m_lonlat[0], m_lonlat[1], radius));
-    Vector3 normal = math::SubVector<Vector4 const>(x, 0, 3);
-    Vector4 plane(normal[0], normal[1], normal[2], dot_prod(normal, pt));
-   
     // project onto patch_list 
     std::vector<ImageView<float32> > patch_list(m_num_patches);
 
     for (unsigned i = 0; i < m_num_patches; i++) {
       boost::shared_ptr<camera::CameraModel> cam(new camera::PinholeModel(m_camera_list[i]));
-      patch_list[i] = cartography::orthoproject(plane_dem_view(m_georef, plane, 
-                                                               whole_kern, whole_kern),
+      patch_list[i] = cartography::orthoproject(plane_dem_view(m_georef, x, 
+                                                               whole_win_pad, whole_win_pad),
                                                 m_georef, m_image_list[i], cam,
                                                 BilinearInterpolation(), ZeroEdgeExtension());
     }

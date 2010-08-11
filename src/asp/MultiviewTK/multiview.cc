@@ -46,7 +46,7 @@ int main( int argc, char *argv[] ) {
   read_georeference(georef, opts.dem_name);
   translate_georef(georef, opts.bbox.min());
 
-  int col = 500, row = 500;
+  int col = 600, row = 400;
   GeometryOptimizer<DiskImageView<float32> > go(col, row, georef, image_list,
                                                             camera_list);
 
@@ -54,7 +54,7 @@ int main( int argc, char *argv[] ) {
 
   vw_log().console_log().rule_set().add_rule(40, "math");
 
-  Vector4 result = math::conjugate_gradient(go, plane, math::ArmijoStepSize(.1), 500);
+  Vector4 result = math::conjugate_gradient(go, plane, math::ArmijoStepSize(100), 500);
 
   return 0;
 }

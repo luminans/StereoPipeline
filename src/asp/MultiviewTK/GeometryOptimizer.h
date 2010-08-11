@@ -71,6 +71,7 @@ struct GeometryOptimizer {
   }
      
   result_type operator()(domain_type const& x) const {
+
     std::vector<ImageView<float32> > patch_list(get_ortho_patches(x));
     ImageView<float32> albedo(whole_win_pad, whole_win_pad);
 
@@ -84,14 +85,19 @@ struct GeometryOptimizer {
 
     for (unsigned i = 0; i < m_num_patches; i++) {
       ImageView<float32> e = patch_list[i] - albedo;
-      result += sum_of_pixel_values(m_window * gaussian_filter(e * e, whole_kern / 6.0));
+      result += sum_of_pixel_values(crop(m_window * gaussian_filter(e * e, whole_kern / 6.0),
+                                         half_kern, half_kern, whole_kern, whole_kern));
+      
     }
 
     return result;
   } 
 
   gradient_type gradient(domain_type const& x) const {
-    std::cout << x << std::endl;
+    static int iter = 0;
+    iter++;
+    Vector3 e = cartography::lonlat_to_normal(m_lonlat);
+    std::cout << x[3] / dot_prod(subvector(x, 0, 3), e) - m_georef.datum().radius(m_lonlat[0], m_lonlat[1]) << std::endl;
 
     std::vector<ImageView<float32> > patch_list(get_ortho_patches(x));
     ImageView<float32> albedo(whole_win_pad, whole_win_pad);
@@ -109,8 +115,14 @@ struct GeometryOptimizer {
     for (unsigned i = 0; i < m_num_patches; i++) {
       ImageView<Vector2> grad_l = grad_albedo * gaussian_filter(patch_list[i] - albedo, whole_kern / 6.0);
 
-      result += sum_of_pixel_values(m_window * 
-        plane_jacobian_view(m_lonlat, m_georef, m_camera_list[i], x, whole_win_pad, whole_win_pad) * grad_l); 
+      result += sum_of_pixel_values(crop(m_window * 
+        plane_jacobian_view(m_lonlat, m_georef, m_camera_list[i], x, whole_win_pad, whole_win_pad) * grad_l,
+        half_kern, half_kern, whole_win, whole_win)); 
+
+      std::stringstream ss;
+      ss << "out/" << iter << "-" << i << ".tif";
+      write_image(ss.str(), channel_cast_rescale<uint8>(patch_list[i]));
+
     }
 
 
